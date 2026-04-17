@@ -1,0 +1,16 @@
+TCSSO test_log
+SR = 0.5 , Epoch= 20
+x_train l = 901 PRD = 3.778% ; SNR = 28.453 dB
+D_S_3
+l = 2 ; 
+non-normalized PRD = 28.95% ; SNR = 10.764 dB 
+normalized PRD = 4.83% ; SNR = 26.304 dB
+Denormalized PRD = 0.68% ; SNR = 43.26
+
+SR = 0.25 , Epoch= 20
+x_train l = 901 PRD = 34.988% ; SNR = 9.121 dB
+D_S_3
+l = 2 ; 
+non-normalized PRD = 27.21% ; SNR = 11.303 dB 
+normalized PRD = 14.38% ; SNR = 16.84 dB
+Denormalized PRD = 2.04% ; SNR = 33.80 dB
