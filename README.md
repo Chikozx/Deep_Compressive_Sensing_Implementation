@@ -166,7 +166,7 @@ The sensing matrix is received from the desktop app as a packed bitfield (1 bit 
 
 ---
 
-## [Desktop Application](desktop_app)
+## [Desktop Application](Desktop_app)
 
 ### Requirements
 
@@ -194,7 +194,7 @@ Set `UI_ONLY = True` in `config.py` to run the GUI without TensorFlow (for UI de
 ---
 
 
-## [Deep Learning Training](dl_training)
+## [Deep Learning Training](Dl_training)
 
 Open the training notebook:
 
