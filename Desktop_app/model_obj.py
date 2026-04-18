@@ -1,3 +1,6 @@
+# Copyright 2026 Joseph Maximillian Bonaventura Chico Reginald Jansen
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 from PySide6.QtCore import QObject, Signal
 import pywt
 import numpy as np

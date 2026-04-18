@@ -1,3 +1,6 @@
+# Copyright 2026 Joseph Maximillian Bonaventura Chico Reginald Jansen
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 import os , shutil
 from PySide6.QtWidgets import QMessageBox, QDialog, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QComboBox, QFileDialog, QGroupBox, QGridLayout
 from config import UI_ONLY

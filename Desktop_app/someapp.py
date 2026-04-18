@@ -1,3 +1,6 @@
+# Copyright 2026 Joseph Maximillian Bonaventura Chico Reginald Jansen
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 import sys
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QTabWidget, QVBoxLayout, QLabel, QHBoxLayout
 from tab_1 import tab_1

@@ -1,3 +1,6 @@
+# Copyright 2026 Joseph Maximillian Bonaventura Chico Reginald Jansen
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 import numpy as np
 from PySide6.QtWidgets import QLineEdit, QComboBox, QWidget, QVBoxLayout, QLabel, QFileDialog, QPushButton, QHBoxLayout, QMessageBox, QGroupBox, QGridLayout, QSizePolicy
 from PySide6.QtCore import QThread, QTimer, Qt, Slot

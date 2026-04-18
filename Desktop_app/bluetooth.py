@@ -1,3 +1,6 @@
+# Copyright 2026 Joseph Maximillian Bonaventura Chico Reginald Jansen
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 import numpy as np
 from PySide6.QtSerialPort import QSerialPort
 from PySide6.QtCore import QIODevice, Signal, QObject, Slot, QMetaMethod

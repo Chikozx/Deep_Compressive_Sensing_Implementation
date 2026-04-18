@@ -1,3 +1,6 @@
+# Copyright 2026 Joseph Maximillian Bonaventura Chico Reginald Jansen
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 import numpy as np
 import os
 from PySide6.QtWidgets import QFileDialog, QWidget, QVBoxLayout, QLabel, QSplitter, QPushButton, QHBoxLayout, QComboBox
