@@ -124,7 +124,7 @@ Deep_Compressive_Sensing_Implementation/
 
 ---
 
-## [Firmware (ESP32)](firmware)
+## [Firmware (ESP32)](Firmware)
 
 ### Build & Flash
 
