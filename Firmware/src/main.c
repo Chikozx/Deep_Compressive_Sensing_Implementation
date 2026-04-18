@@ -1,19 +1,30 @@
+
 /*
- * SPDX-FileCopyrightText: 2021-2024 Espressif Systems (Shanghai) CO LTD
- *
- * SPDX-License-Identifier: Unlicense OR CC0-1.0
+   Copyright 2026 Joseph Maximillian Bonaventura Chico Reginald Jansen
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
  */
 
- #include <stdint.h>
- #include <stdbool.h>
- #include <stdio.h>
- #include <inttypes.h>
- #include "nvs.h"
- #include "nvs_flash.h"
- #include "freertos/FreeRTOS.h"
- #include "freertos/task.h"
- #include "freertos/queue.h"
- #include "esp_adc/adc_oneshot.h"
+#include <stdint.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <inttypes.h>
+#include "nvs.h"
+#include "nvs_flash.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
+#include "esp_adc/adc_oneshot.h"
 #include"driver/uart.h"
 
 
@@ -21,25 +32,36 @@
 
 
  /* Task handle*/
- TaskHandle_t SENDtaskhandle;
- TaskHandle_t CMtaskhandle;
- TaskHandle_t andor;
- TaskHandle_t CDtaskhandle;
+TaskHandle_t SENDtaskhandle;
+TaskHandle_t CMtaskhandle;
+TaskHandle_t CONFtaskhandle;
+TaskHandle_t CDtaskhandle;
 
- QueueHandle_t send_data_queue = NULL;
- QueueHandle_t sampling_data_queue = NULL;
- QueueHandle_t compress_data_queue = NULL;
+QueueHandle_t send_data_queue = NULL;
+QueueHandle_t sampling_data_queue = NULL;
+QueueHandle_t compress_data_queue = NULL;
+QueueHandle_t receive_config_queue = NULL;
 
- QueueHandle_t receive_config_queue = NULL;
-
- esp_timer_handle_t sampling_timer=NULL;
+esp_timer_handle_t sampling_timer=NULL;
 
 static int send_data_buffer[64];
 static int compress_data_buffer[256];
 int step_val=0;
 bool isstep=false;
 int step_len=0;
-int step_mode;
+
+/**
+ * @brief There's 3 mode of operation: 
+ * 
+ * - mode 0 is normal step operation
+ * 
+ * - mode 1 is compression mode operation 
+ * 
+ * - mode 3 is continous mode operation
+ * 
+ */
+int mode;
+
 
 Model model1={
     .name = NULL,
@@ -53,8 +75,9 @@ void send_data(void *pvParameters){
     Compressed_data *s;
     for(;;){
         if(xQueueReceive(send_data_queue, &s, portMAX_DELAY)==pdTRUE){
-            if(step_mode==0)
+            if(mode==0)
             {
+                //Sending data on normal step mode
                 uint8_t send_buffer[128*sizeof(int)]={0};
                 memcpy(send_buffer,s->data,128*sizeof(int));
                     if(spp_conn_handle !=0){
@@ -68,8 +91,9 @@ void send_data(void *pvParameters){
                         //printf("%02x %02x %02x %02x\n",send_buffer[0],send_buffer[1],send_buffer[2],send_buffer[3]);
                     }
             
-            }else if (step_mode==1)
+            }else if (mode==1)
             {
+                //Sending data on compression mode
                 printf("Sending_data \n");
                 int row = model1.SM_Size[0];
                 uint8_t send_buffer[row*sizeof(float)+sizeof(s->max)+sizeof(s->min)];
@@ -90,8 +114,9 @@ void send_data(void *pvParameters){
                     printf("%d\n",min);
                 }
 
-            }else if (step_mode == 3)
+            }else if (mode == 3)
             {
+                //Sending data on normal continous mode
                 uint8_t send_buffer[64*sizeof(int)]={0};
                 memcpy(send_buffer,s->data,64*sizeof(int));
                 if(spp_conn_handle !=0){
@@ -101,32 +126,13 @@ void send_data(void *pvParameters){
         
             free(s->data);
             free(s);
-        }
-        
-        
-
-        //For Debug MAYBE IDK
-        // if(xQueueReceive(send_data_queue,&send_buffer,portMAX_DELAY)==pdTRUE)
-        // {
-        //     if (spp_conn_handle !=0)
-        //     {
-        //         if (esp_spp_write(spp_conn_handle,sizeof(send_buffer),(uint8_t*)send_buffer)==ESP_OK)
-        //         {
-        //             //printf("Yahoo2, size of data : %d \n", sizeof(send_buffer));
-        //         }
-        //     }
-        // }
-        // if (esp_spp_write(conn_handle, sizeof(adc_raw)*10, (uint8_t*)data_buffer)==ESP_OK){
-        //     
-        // }
-        
+        }    
     }
 }
 
-//Simple processing using for loop
-        
+//Task for processing data received from the sampling using timer interrupt on continous mode
 void continous_data_task(void* pvParameters){
-    ESP_LOGI("TES4","Continous Data task Start");
+    ESP_LOGI("TASK","Continous Data task Start");
     for(;;){
         
         for(int i = 0; i<64;i++){
@@ -144,10 +150,11 @@ void continous_data_task(void* pvParameters){
     }       
 }
 
+//Task for processing data received from the sampling using timer interrupt on step and compression mode
 void compression_data_task(void* pvParameters){
-    ESP_LOGI("TES3","Compression Data Start");
+    ESP_LOGI("TASK","Compression Data Start");
     for(;;){
-        //Simple processing using for loop
+
         for(int i = 0; i<256;i++){
             int single_sample = 0;
             xQueueReceive(compress_data_queue,&single_sample,portMAX_DELAY);
@@ -165,24 +172,25 @@ void compression_data_task(void* pvParameters){
             }
 
         Compressed_data *s = malloc(sizeof(Compressed_data));
-        if (step_mode == 0)
+        if (mode == 0)
         {
+            //processing data to be sent for normal step mode
             s->data = malloc(256*sizeof(int));
             memcpy(s->data,compress_data_buffer,256*sizeof(int));
             if(xQueueSendToBack(send_data_queue,&s,0) == errQUEUE_FULL){
                 printf("Send Queue Full");
             }
         }
-        else if (step_mode == 1)
+        else if (mode == 1)
         {
-
+            //processing data, normalization and matrix multiplication for compression mode
             s->data = malloc(model1.SM_Size[0]*sizeof(float));
 
             //Find MAX
-            s->max = compress_data_buffer[0];  // Assume the first element is max
+            s->max = compress_data_buffer[0]; 
             for (int i = 1; i < 256; i++) {
                 if (compress_data_buffer[i] > s->max) {
-                    s->max = compress_data_buffer[i];  // Update max if current is greater
+                    s->max = compress_data_buffer[i]; 
                 }
             }
 
@@ -207,7 +215,6 @@ void compression_data_task(void* pvParameters){
             }
             
             //MatMul
-            
             for (int i=0; i<model1.SM_Size[0];i++){
                 float acc_buff = 0;
 
@@ -233,12 +240,13 @@ void compression_data_task(void* pvParameters){
     }
 }
 
+//Timer interrupt for sampling data
 void IRAM_ATTR sensor_sampling( void*arg ){
 
     adc_oneshot_unit_handle_t adc_handle = (adc_oneshot_unit_handle_t) arg;
     int sampling_val = 0;
     adc_oneshot_read(adc_handle,ADC_CHANNEL_3,&sampling_val);
-    if(step_mode == 3){
+    if(mode == 3){
     xQueueSendFromISR(sampling_data_queue,&sampling_val,NULL);
     }else
     {
@@ -246,7 +254,7 @@ void IRAM_ATTR sensor_sampling( void*arg ){
     }
 }
 
-// step (sensor sampling) -> (compress data) -> (send_data ) 
+// Step (sensor sampling) -> (compress data) -> (send_data) 
 
 void app_main(void)
 {
@@ -295,7 +303,7 @@ void app_main(void)
     r = xTaskCreatePinnedToCore(compression_data_task,"Compression Data Task",4096,NULL,0,&CMtaskhandle,1);
     if (r != pdPASS){ESP_LOGI("MAIN", "Compression data task not created");}
 
-    r = xTaskCreatePinnedToCore(config_data,"Configuration Data",2048,NULL,1,&andor,1);
+    r = xTaskCreatePinnedToCore(config_data,"Configuration Data",2048,NULL,1,&CONFtaskhandle,1);
     if (r != pdPASS){ESP_LOGI("MAIN", "config task not created");}
 
     r = xTaskCreatePinnedToCore(continous_data_task,"Continous Data Task",4096,NULL,0,&CDtaskhandle,1);

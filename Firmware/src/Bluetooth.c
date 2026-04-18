@@ -1,11 +1,24 @@
+/*
+   Copyright 2026 Joseph Maximillian Bonaventura Chico Reginald Jansen
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+ */
+
 #include "Bluetooth.h"
 
 #define SPP_SERVER_NAME "SPP_SERVER"
-#define SPP_SHOW_DATA 0
-#define SPP_SHOW_SPEED 1
-#define SPP_SHOW_MODE SPP_SHOW_SPEED    /*Choose show mode: show data or speed*/
 
-static const char local_device_name[] = CONFIG_EXAMPLE_LOCAL_DEVICE_NAME;
+static const char local_device_name[] = CONFIG_LOCAL_DEVICE_NAME;
 
 uint32_t spp_conn_handle =0;
  
@@ -18,29 +31,6 @@ static long data_num = 0;
 static const esp_spp_sec_t sec_mask = ESP_SPP_SEC_AUTHENTICATE;
 static const esp_spp_role_t role_slave = ESP_SPP_ROLE_SLAVE;
 
-static char *bda2str(uint8_t * bda, char *str, size_t size)
-{
-    if (bda == NULL || str == NULL || size < 18) {
-        return NULL;
-    }
-
-    uint8_t *p = bda;
-    sprintf(str, "%02x:%02x:%02x:%02x:%02x:%02x",
-            p[0], p[1], p[2], p[3], p[4], p[5]);
-    return str;
-}
-
-static void print_speed(void)
-{
-    float time_old_s = time_old.tv_sec + time_old.tv_usec / 1000000.0;
-    float time_new_s = time_new.tv_sec + time_new.tv_usec / 1000000.0;
-    float time_interval = time_new_s - time_old_s;
-    float speed = data_num * 8 / time_interval / 1000.0;
-    ESP_LOGI(SPP_TAG, "speed(%fs ~ %fs): %f kbit/s" , time_old_s, time_new_s, speed);
-    data_num = 0;
-    time_old.tv_sec = time_new.tv_sec;
-    time_old.tv_usec = time_new.tv_usec;
-}
 
 static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
  {
@@ -83,28 +73,9 @@ static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
          ESP_LOGI(SPP_TAG, "ESP_SPP_CL_INIT_EVT");
          break;
      case ESP_SPP_DATA_IND_EVT:
- #if (SPP_SHOW_MODE == SPP_SHOW_DATA)
-         /*
-          * We only show the data in which the data length is less than 128 here. If you want to print the data and
-          * the data rate is high, it is strongly recommended to process them in other lower priority application task
-          * rather than in this callback directly. Since the printing takes too much time, it may stuck the Bluetooth
-          * stack and also have a effect on the throughput!
-          */
-         ESP_LOGI(SPP_TAG, "ESP_SPP_DATA_IND_EVT len:%d handle:%"PRIu32,
-                  param->data_ind.len, param->data_ind.handle);
-         if (param->data_ind.len < 128) {
-             ESP_LOG_BUFFER_HEX("", param->data_ind.data, param->data_ind.len);
-         }
- #else
-         gettimeofday(&time_new, NULL);
-         data_num += param->data_ind.len;
-         if (time_new.tv_sec - time_old.tv_sec >= 3) {
-             print_speed();
-         }
- #endif
         
-        if(isconfig){
-            
+        //Receive Config
+        if(isconfig){        
             Config_parameter* buffer = malloc(sizeof(Config_parameter));
             buffer->config_param_address = malloc(param->data_ind.len);
             if(buffer && buffer->config_param_address){
@@ -115,12 +86,15 @@ static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
                 xQueueSendToBack(receive_config_queue,&buffer,0);
             }
         }else{
+
             if(strncmp((const char*)param->data_ind.data,"start",strlen("start"))==0){
+                //Start normal continous mode
                 printf("Timer Start");
                 esp_timer_start_periodic(sampling_timer,2778);
-                step_mode=3;
+                mode=3;
             }else if (strncmp((const char*)param->data_ind.data,"stop",strlen("stop"))==0)
             {
+                //Stop normal continous mode
                 printf("Timer Stop");
                 esp_timer_stop(sampling_timer);
             }else if (strncmp((const char*)param->data_ind.data,"step0",strlen("step0"))==0)
@@ -128,7 +102,7 @@ static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
                 char string[6]="";
                 memcpy(string,param->data_ind.data,param->data_ind.len);
                 step_len = *(param->data_ind.data + 5);
-                step_mode = 0;
+                mode = 0;
                 printf("step_len %d\n",step_len);
                 esp_timer_start_periodic(sampling_timer,2778);
                 isstep = true;
@@ -137,12 +111,13 @@ static void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
                 char string[6]="";
                 memcpy(string,param->data_ind.data,param->data_ind.len);
                 step_len = *(param->data_ind.data + 5);
-                step_mode =1;
+                mode =1;
                 printf("step_len %d\n",step_len);
                 esp_timer_start_periodic(sampling_timer,2778);
                 isstep = true;
             }else if (strncmp((const char*)param->data_ind.data,"config",strlen("config"))==0)
             {
+                //Starting configuration mode
                 if(spp_conn_handle !=0){
                         esp_spp_write(spp_conn_handle,strlen("ACK"),(uint8_t*)"ACK");
                         printf("ACK \n");
@@ -217,7 +192,7 @@ void esp_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
          break;
      }
  
- #if (CONFIG_EXAMPLE_SSP_ENABLED == true)
+
      case ESP_BT_GAP_CFM_REQ_EVT:
          ESP_LOGI(SPP_TAG, "ESP_BT_GAP_CFM_REQ_EVT Please compare the numeric value: %06"PRIu32, param->cfm_req.num_val);
          esp_bt_gap_ssp_confirm_reply(param->cfm_req.bda, true);
@@ -228,8 +203,7 @@ void esp_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
      case ESP_BT_GAP_KEY_REQ_EVT:
          ESP_LOGI(SPP_TAG, "ESP_BT_GAP_KEY_REQ_EVT Please enter passkey!");
          break;
- #endif
- 
+
      case ESP_BT_GAP_MODE_CHG_EVT:
          ESP_LOGI(SPP_TAG, "ESP_BT_GAP_MODE_CHG_EVT mode:%d bda:[%s]", param->mode_chg.mode,
                   bda2str(param->mode_chg.bda, bda_str, sizeof(bda_str)));
@@ -297,17 +271,10 @@ void bluetooth_config(void){
          return;
      }
  
- #if (CONFIG_EXAMPLE_SSP_ENABLED == true)
-     /* Set default parameters for Secure Simple Pairing */
      esp_bt_sp_param_t param_type = ESP_BT_SP_IOCAP_MODE;
      esp_bt_io_cap_t iocap = ESP_BT_IO_CAP_IO;
      esp_bt_gap_set_security_param(param_type, &iocap, sizeof(uint8_t));
- #endif
  
-     /*
-      * Set default parameters for Legacy Pairing
-      * Use variable pin, input pin code when pairing
-      */
      esp_bt_pin_type_t pin_type = ESP_BT_PIN_TYPE_VARIABLE;
      esp_bt_pin_code_t pin_code;
      esp_bt_gap_set_pin(pin_type, 0, pin_code);
